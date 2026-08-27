@@ -4,13 +4,15 @@ import { TabNav, type TabId } from './components/TabNav'
 import { SecureTab } from './components/SecureTab'
 import { SettleTab } from './components/SettleTab'
 import { SocialTab } from './components/SocialTab'
+import { DiscoverTab } from './components/DiscoverTab'
 import { ItineraryIntake } from './components/ItineraryIntake'
 import { ActivityTimeline } from './components/ActivityTimeline'
+import { FeedbackWidget } from './components/FeedbackWidget'
 import { TripProvider, useTrip } from './lib/tripState'
 import { getRequirements } from './data/visaRequirements'
 
 function AppShell() {
-  const { state } = useTrip()
+  const { state, resetTrip } = useTrip()
   const [tab, setTab] = useState<TabId>('secure')
   const hasAutoAdvanced = useRef(false)
 
@@ -26,6 +28,15 @@ function AppShell() {
     }
   }, [allChecklistDone])
 
+  function handleReset() {
+    if (!window.confirm('Start a new case? This clears your current trip, forms, and checklist.')) {
+      return
+    }
+    resetTrip()
+    setTab('secure')
+    hasAutoAdvanced.current = false
+  }
+
   return (
     <div className="min-h-screen">
       <header className="border-b border-slate-200 dark:border-slate-800">
@@ -39,14 +50,24 @@ function AppShell() {
             </span>
             NestGo
           </div>
-          <a
-            href="https://github.com/naga-sortis/NestGo"
-            target="_blank"
-            rel="noreferrer"
-            className="text-sm text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100"
-          >
-            View source
-          </a>
+          <div className="flex items-center gap-4">
+            {trip && (
+              <button
+                onClick={handleReset}
+                className="text-sm text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100"
+              >
+                Start new case
+              </button>
+            )}
+            <a
+              href="https://github.com/naga-sortis/NestGo"
+              target="_blank"
+              rel="noreferrer"
+              className="text-sm text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100"
+            >
+              View source
+            </a>
+          </div>
         </div>
       </header>
 
@@ -66,13 +87,15 @@ function AppShell() {
             {tab === 'secure' && <SecureTab />}
             {tab === 'settle' && <SettleTab />}
             {tab === 'social' && <SocialTab />}
+            {tab === 'discover' && <DiscoverTab />}
           </div>
           <ActivityTimeline />
+          <FeedbackWidget />
         </main>
       )}
 
       <footer className="border-t border-slate-200 py-8 text-center text-sm text-slate-400 dark:border-slate-800">
-        NestGo — Secure, Settle, Social. Built for anyone moving abroad.
+        NestGo — Secure, Settle, Social, Discover. Built for anyone moving abroad.
       </footer>
     </div>
   )

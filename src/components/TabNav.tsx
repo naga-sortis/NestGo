@@ -1,9 +1,10 @@
-export type TabId = 'secure' | 'settle' | 'social'
+export type TabId = 'secure' | 'settle' | 'social' | 'discover'
 
 const TABS: { id: TabId; label: string; blurb: string }[] = [
   { id: 'secure', label: 'Secure', blurb: 'Bureaucracy, handled' },
   { id: 'settle', label: 'Settle', blurb: 'Hand-off marketplace' },
   { id: 'social', label: 'Social', blurb: 'Neighborhood routines' },
+  { id: 'discover', label: 'Discover', blurb: 'Trip ideas & culture' },
 ]
 
 export function TabNav({
@@ -16,7 +17,7 @@ export function TabNav({
   lockedTabs?: TabId[]
 }) {
   return (
-    <div className="mx-auto flex max-w-xl gap-2 rounded-xl border border-slate-200 bg-white p-1.5 dark:border-slate-800 dark:bg-slate-900">
+    <div className="mx-auto flex max-w-2xl flex-wrap gap-2 rounded-xl border border-slate-200 bg-white p-1.5 dark:border-slate-800 dark:bg-slate-900">
       {TABS.map((tab) => {
         const locked = lockedTabs.includes(tab.id)
         return (
@@ -25,7 +26,7 @@ export function TabNav({
             onClick={() => !locked && onChange(tab.id)}
             disabled={locked}
             title={locked ? 'Complete your visa checklist first' : undefined}
-            className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors ${
+            className={`min-w-[7rem] flex-1 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors ${
               locked
                 ? 'cursor-not-allowed text-slate-300 dark:text-slate-600'
                 : active === tab.id

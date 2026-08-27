@@ -1,15 +1,29 @@
 import { useRef, useState } from 'react'
 import { useTrip } from '../lib/tripState'
 import { getRequirements } from '../data/visaRequirements'
-import { buildGoogleCalendarUrl } from '../lib/calendar'
+import { downloadTextFile } from '../lib/download'
+import { buildCaseSummaryHtml } from '../lib/exportCase'
 import { SignaturePad } from './SignaturePad'
+import { ChecklistItemRow } from './ChecklistItemRow'
 
 type UploadStep = 'idle' | 'processing' | 'done'
 
+// Stand-in for a real OCR/AI extraction call — fills in plausible values so
+// the auto-fill behavior is visible and editable. Swap for a real backend
+// call (see README) to extract these from the actual uploaded document.
+function mockExtractedIdentity() {
+  return {
+    fullName: 'Jordan A. Traveler',
+    passportNumber: 'X1234567',
+    nationality: 'Detected from document',
+    arrivalDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+  }
+}
+
 export function SecureTab() {
-  const { state, setFormAnswer, setSignature, toggleChecklistItem, logActivity } = useTrip()
+  const { state, setFormAnswer, setSignature, logActivity } = useTrip()
   const trip = state.trip!
-  const { fields, checklist } = getRequirements(trip.destinationCountry, trip.purpose)
+  const { baseFields, checklist } = getRequirements(trip.destinationCountry, trip.purpose)
 
   const [uploadStep, setUploadStep] = useState<UploadStep>('idle')
   const [fileName, setFileName] = useState<string | null>(null)
@@ -17,6 +31,7 @@ export function SecureTab() {
 
   const doneCount = checklist.filter((item) => state.checklist[item.id]).length
   const allDone = doneCount === checklist.length
+  const hasCaseData = Object.keys(state.formAnswers).length > 0 || !!state.signature
 
   function handleFile(file: File | undefined) {
     if (!file) return
@@ -24,9 +39,36 @@ export function SecureTab() {
     setUploadStep('processing')
     logActivity(`Uploaded document: ${file.name}`)
     setTimeout(() => {
+      const extracted = mockExtractedIdentity()
+      Object.entries(extracted).forEach(([id, value]) => setFormAnswer(id, value))
       setUploadStep('done')
-      logActivity('AI extracted document fields')
+      logActivity('AI extracted identity fields from document (review before relying on them)')
     }, 2000)
+  }
+
+  function handleDownload() {
+    const html = buildCaseSummaryHtml({
+      trip,
+      baseFields,
+      checklist,
+      formAnswers: state.formAnswers,
+      checklistState: state.checklist,
+      signature: state.signature,
+    })
+    downloadTextFile(`nestgo-case-${trip.destinationCity.toLowerCase()}.html`, html)
+    logActivity('Downloaded case summary')
+  }
+
+  function buildMailto() {
+    const subject = `My NestGo case — ${trip.destinationCity}`
+    const body = [
+      `${trip.originCity}, ${trip.originCountry} -> ${trip.destinationCity}, ${trip.destinationCountry} (${trip.purpose})`,
+      '',
+      `Checklist: ${doneCount}/${checklist.length} complete`,
+      '',
+      "I've attached my downloaded NestGo case summary (download it first, then attach the file to this email).",
+    ].join('\n')
+    return `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
   }
 
   return (
@@ -67,12 +109,12 @@ export function SecureTab() {
         )}
         {uploadStep === 'done' && (
           <p className="mt-3 rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300">
-            Extracted. Review and complete the fields below.
+            Extracted below — review and correct before it's used on any form.
           </p>
         )}
 
         <div className="mt-5 grid gap-3 sm:grid-cols-2">
-          {fields.map((field) => (
+          {baseFields.map((field) => (
             <div key={field.id}>
               <label className="text-xs font-medium text-slate-500 dark:text-slate-400">
                 {field.label}
@@ -102,6 +144,25 @@ export function SecureTab() {
             </div>
           )}
         </div>
+
+        {hasCaseData && (
+          <div className="mt-5 flex flex-wrap gap-2 border-t border-slate-100 pt-4 dark:border-slate-800">
+            <button
+              type="button"
+              onClick={handleDownload}
+              className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-emerald-600 hover:text-emerald-700 dark:border-slate-700 dark:text-slate-300"
+            >
+              📥 Download my forms
+            </button>
+            <a
+              href={buildMailto()}
+              onClick={() => logActivity('Opened email client to send case summary')}
+              className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-emerald-600 hover:text-emerald-700 dark:border-slate-700 dark:text-slate-300"
+            >
+              ✉️ Email me a copy
+            </a>
+          </div>
+        )}
       </div>
 
       <div className="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
@@ -111,6 +172,10 @@ export function SecureTab() {
             {doneCount}/{checklist.length} complete
           </span>
         </div>
+        <p className="mt-1 text-xs text-slate-400">
+          Tap an item to see instructions, fill its specific form fields, or find the
+          right office/portal.
+        </p>
         <div className="mt-2 h-1.5 w-full rounded-full bg-slate-100 dark:bg-slate-800">
           <div
             className="h-1.5 rounded-full bg-emerald-700 transition-all"
@@ -119,43 +184,9 @@ export function SecureTab() {
         </div>
 
         <ul className="mt-4 space-y-2">
-          {checklist.map((item) => {
-            const done = !!state.checklist[item.id]
-            const calendarUrl = buildGoogleCalendarUrl(
-              `NestGo: ${item.label}`,
-              `Reminder generated by NestGo for your ${trip.purpose} move to ${trip.destinationCity}, ${trip.destinationCountry}.`,
-            )
-            return (
-              <li
-                key={item.id}
-                className="flex items-center gap-3 rounded-lg border border-slate-200 px-4 py-3 text-sm dark:border-slate-800"
-              >
-                <button
-                  type="button"
-                  onClick={() => toggleChecklistItem(item.id, item.label)}
-                  className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-xs ${
-                    done
-                      ? 'border-emerald-700 bg-emerald-700 text-white'
-                      : 'border-slate-300 dark:border-slate-600'
-                  }`}
-                >
-                  {done ? '✓' : ''}
-                </button>
-                <span className={`flex-1 ${done ? 'text-slate-400 line-through' : ''}`}>
-                  {item.label}
-                </span>
-                <a
-                  href={calendarUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  onClick={() => logActivity(`Set Google Calendar reminder: ${item.label}`)}
-                  className="shrink-0 rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:border-emerald-600 hover:text-emerald-700 dark:border-slate-700 dark:text-slate-300"
-                >
-                  📅 Remind me
-                </a>
-              </li>
-            )
-          })}
+          {checklist.map((item) => (
+            <ChecklistItemRow key={item.id} item={item} />
+          ))}
         </ul>
 
         {allDone && (

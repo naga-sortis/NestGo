@@ -20,6 +20,13 @@ export type HousingPrefs = {
   sortBy: 'price-asc' | 'price-desc'
 }
 
+export type Feedback = {
+  id: string
+  at: string
+  rating: number
+  comment: string
+}
+
 export type TripState = {
   trip: TripInfo | null
   formAnswers: Record<string, string>
@@ -28,4 +35,5 @@ export type TripState = {
   activityLog: ActivityEntry[]
   housingPrefs: HousingPrefs
   joinedGroups: string[]
+  feedback: Feedback[]
 }

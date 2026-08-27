@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
-import type { ActivityEntry, HousingPrefs, TripInfo, TripState } from '../types'
+import type { ActivityEntry, Feedback, HousingPrefs, TripInfo, TripState } from '../types'
 
 const KEY = 'nestgo:trip-state'
 
@@ -11,6 +11,7 @@ const DEFAULT_STATE: TripState = {
   activityLog: [],
   housingPrefs: { maxPrice: null, zone: 'all', sortBy: 'price-asc' },
   joinedGroups: [],
+  feedback: [],
 }
 
 function load(): TripState {
@@ -25,12 +26,14 @@ function load(): TripState {
 type TripContextValue = {
   state: TripState
   startTrip: (trip: TripInfo) => void
+  resetTrip: () => void
   setFormAnswer: (id: string, value: string) => void
   setSignature: (dataUrl: string) => void
   toggleChecklistItem: (id: string, label: string) => void
   logActivity: (label: string) => void
   setHousingPrefs: (prefs: Partial<HousingPrefs>) => void
   toggleGroup: (id: string) => void
+  submitFeedback: (rating: number, comment: string) => void
 }
 
 const TripContext = createContext<TripContextValue | null>(null)
@@ -56,6 +59,11 @@ export function TripProvider({ children }: { children: ReactNode }) {
     logActivity(
       `Trip started: ${trip.originCity} → ${trip.destinationCity} (${trip.purpose})`,
     )
+  }
+
+  function resetTrip() {
+    localStorage.removeItem(KEY)
+    setState(DEFAULT_STATE)
   }
 
   function setFormAnswer(id: string, value: string) {
@@ -91,17 +99,30 @@ export function TripProvider({ children }: { children: ReactNode }) {
     })
   }
 
+  function submitFeedback(rating: number, comment: string) {
+    const entry: Feedback = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      at: new Date().toISOString(),
+      rating,
+      comment,
+    }
+    setState((prev) => ({ ...prev, feedback: [entry, ...prev.feedback] }))
+    logActivity(`Submitted feedback (${rating}/5)`)
+  }
+
   return (
     <TripContext.Provider
       value={{
         state,
         startTrip,
+        resetTrip,
         setFormAnswer,
         setSignature,
         toggleChecklistItem,
         logActivity,
         setHousingPrefs,
         toggleGroup,
+        submitFeedback,
       }}
     >
       {children}
