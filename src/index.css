@@ -1,0 +1,30 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: system-ui, "Segoe UI", Roboto, sans-serif;
+
+  --color-ink: #08131a;
+  --color-paper: #f9fafb;
+  --color-emerald: #065f46;
+  --color-emerald-light: #10b981;
+  --color-indigo: #1e3a8a;
+  --color-slate: #334155;
+}
+
+:root {
+  color-scheme: light dark;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  background: var(--color-paper);
+  color: var(--color-ink);
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    background: #0b0d12;
+    color: #f3f4f6;
+  }
+}
