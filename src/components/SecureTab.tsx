@@ -1,60 +1,51 @@
 import { useRef, useState } from 'react'
+import { useTrip } from '../lib/tripState'
+import { getRequirements } from '../data/visaRequirements'
+import { buildGoogleCalendarUrl } from '../lib/calendar'
+import { SignaturePad } from './SignaturePad'
 
-type Step = 'idle' | 'processing' | 'done'
-
-type ChecklistItem = {
-  id: string
-  label: string
-  done: boolean
-}
-
-const INITIAL_CHECKLIST: ChecklistItem[] = [
-  { id: 'empadronamiento', label: 'Empadronamiento (city registration)', done: false },
-  { id: 'cita', label: 'Cita Previa request', done: false },
-  { id: 'tie', label: 'TIE / NIE application', done: false },
-]
+type UploadStep = 'idle' | 'processing' | 'done'
 
 export function SecureTab() {
-  const [step, setStep] = useState<Step>('idle')
+  const { state, setFormAnswer, setSignature, toggleChecklistItem, logActivity } = useTrip()
+  const trip = state.trip!
+  const { fields, checklist } = getRequirements(trip.destinationCountry, trip.purpose)
+
+  const [uploadStep, setUploadStep] = useState<UploadStep>('idle')
   const [fileName, setFileName] = useState<string | null>(null)
-  const [checklist, setChecklist] = useState(INITIAL_CHECKLIST)
   const inputRef = useRef<HTMLInputElement>(null)
+
+  const doneCount = checklist.filter((item) => state.checklist[item.id]).length
+  const allDone = doneCount === checklist.length
 
   function handleFile(file: File | undefined) {
     if (!file) return
     setFileName(file.name)
-    setStep('processing')
-    // Concierge-mock delay standing in for a real Claude/OpenAI extraction
-    // call — see README "Wiring a real AI backend" for how to swap this.
+    setUploadStep('processing')
+    logActivity(`Uploaded document: ${file.name}`)
     setTimeout(() => {
-      setStep('done')
-      setChecklist((prev) =>
-        prev.map((item, i) => (i === 0 ? { ...item, done: true } : item)),
-      )
-    }, 2200)
-  }
-
-  function toggleItem(id: string) {
-    setChecklist((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, done: !item.done } : item)),
-    )
+      setUploadStep('done')
+      logActivity('AI extracted document fields')
+    }, 2000)
   }
 
   return (
-    <div className="grid gap-6 md:grid-cols-2">
+    <div className="space-y-6">
       <div className="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
-        <h2 className="text-lg font-semibold">AI document assistant</h2>
+        <h2 className="text-lg font-semibold">
+          {trip.destinationCountry} paperwork for your {trip.purpose} move
+        </h2>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          Drop a passport or work contract — NestGo extracts the fields your
-          local paperwork needs.
+          Starter checklist — confirm exact requirements with{' '}
+          {trip.destinationCountry}'s official immigration portal before relying on this.
         </p>
 
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
-          className="mt-5 flex w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 py-10 text-slate-500 transition-colors hover:border-emerald-600 hover:text-emerald-700 dark:border-slate-700 dark:text-slate-400"
+          className="mt-5 flex w-full flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 py-8 text-slate-500 transition-colors hover:border-emerald-600 hover:text-emerald-700 dark:border-slate-700 dark:text-slate-400"
         >
-          <span className="text-3xl" aria-hidden="true">
+          <span className="text-2xl" aria-hidden="true">
             📄
           </span>
           <span className="text-sm font-medium">
@@ -68,63 +59,110 @@ export function SecureTab() {
           className="hidden"
           onChange={(e) => handleFile(e.target.files?.[0])}
         />
-
-        {step === 'processing' && (
-          <div className="mt-4 flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+        {uploadStep === 'processing' && (
+          <div className="mt-3 flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
             <span className="h-3 w-3 animate-spin rounded-full border-2 border-emerald-700 border-t-transparent" />
             Processing with NestGo AI...
           </div>
         )}
-
-        {step === 'done' && (
-          <div className="mt-4 rounded-lg bg-emerald-50 p-4 text-sm text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300">
-            <p className="font-medium">
-              AI verification complete. Your Spanish EX-15 form has been
-              generated.
-            </p>
-            <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-emerald-900/80 dark:text-emerald-200/80">
-              <dt>Full name</dt>
-              <dd>Extracted from document</dd>
-              <dt>Passport number</dt>
-              <dd>•••• redacted</dd>
-              <dt>Nationality</dt>
-              <dd>Detected automatically</dd>
-              <dt>Form</dt>
-              <dd>EX-15 pre-filled</dd>
-            </dl>
-          </div>
+        {uploadStep === 'done' && (
+          <p className="mt-3 rounded-lg bg-emerald-50 px-4 py-2 text-sm text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300">
+            Extracted. Review and complete the fields below.
+          </p>
         )}
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-2">
+          {fields.map((field) => (
+            <div key={field.id}>
+              <label className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                {field.label}
+              </label>
+              <input
+                type={field.type}
+                value={state.formAnswers[field.id] ?? ''}
+                onChange={(e) => setFormAnswer(field.id, e.target.value)}
+                onBlur={() => logActivity(`Filled in: ${field.label}`)}
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950"
+              />
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-5">
+          <label className="text-xs font-medium text-slate-500 dark:text-slate-400">
+            Signature
+          </label>
+          {state.signature ? (
+            <div className="mt-1 rounded-lg border border-emerald-700 bg-emerald-50 p-2 dark:bg-emerald-900/20">
+              <img src={state.signature} alt="Your signature" className="h-16" />
+            </div>
+          ) : (
+            <div className="mt-1">
+              <SignaturePad onSave={setSignature} />
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
-        <h2 className="text-lg font-semibold">Madrid arrival checklist</h2>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          Track the three steps every new arrival needs, in order.
-        </p>
-        <ul className="mt-5 space-y-3">
-          {checklist.map((item) => (
-            <li key={item.id}>
-              <button
-                type="button"
-                onClick={() => toggleItem(item.id)}
-                className="flex w-full items-center gap-3 rounded-lg border border-slate-200 px-4 py-3 text-left text-sm hover:border-emerald-600 dark:border-slate-800"
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Arrival checklist</h2>
+          <span className="text-sm text-slate-500 dark:text-slate-400">
+            {doneCount}/{checklist.length} complete
+          </span>
+        </div>
+        <div className="mt-2 h-1.5 w-full rounded-full bg-slate-100 dark:bg-slate-800">
+          <div
+            className="h-1.5 rounded-full bg-emerald-700 transition-all"
+            style={{ width: `${(doneCount / checklist.length) * 100}%` }}
+          />
+        </div>
+
+        <ul className="mt-4 space-y-2">
+          {checklist.map((item) => {
+            const done = !!state.checklist[item.id]
+            const calendarUrl = buildGoogleCalendarUrl(
+              `NestGo: ${item.label}`,
+              `Reminder generated by NestGo for your ${trip.purpose} move to ${trip.destinationCity}, ${trip.destinationCountry}.`,
+            )
+            return (
+              <li
+                key={item.id}
+                className="flex items-center gap-3 rounded-lg border border-slate-200 px-4 py-3 text-sm dark:border-slate-800"
               >
-                <span
+                <button
+                  type="button"
+                  onClick={() => toggleChecklistItem(item.id, item.label)}
                   className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-xs ${
-                    item.done
+                    done
                       ? 'border-emerald-700 bg-emerald-700 text-white'
                       : 'border-slate-300 dark:border-slate-600'
                   }`}
                 >
-                  {item.done ? '✓' : ''}
-                </span>
-                <span className={item.done ? 'line-through text-slate-400' : ''}>
+                  {done ? '✓' : ''}
+                </button>
+                <span className={`flex-1 ${done ? 'text-slate-400 line-through' : ''}`}>
                   {item.label}
                 </span>
-              </button>
-            </li>
-          ))}
+                <a
+                  href={calendarUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={() => logActivity(`Set Google Calendar reminder: ${item.label}`)}
+                  className="shrink-0 rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:border-emerald-600 hover:text-emerald-700 dark:border-slate-700 dark:text-slate-300"
+                >
+                  📅 Remind me
+                </a>
+              </li>
+            )
+          })}
         </ul>
+
+        {allDone && (
+          <p className="mt-4 rounded-lg bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300">
+            All done — head to the Settle tab to find housing.
+          </p>
+        )}
       </div>
     </div>
   )
