@@ -1,20 +1,37 @@
-import { useMemo, useState } from 'react'
-import { listings } from '../data/listings'
+import { useEffect, useMemo, useState } from 'react'
+import type { Listing } from '../data/listings'
+import { fetchListings, subscribeToListings } from '../lib/repos/listingsRepo'
 import { ListingModal } from './ListingModal'
 import { useTrip } from '../lib/tripState'
 
 export function SettleTab() {
   const { state, setHousingPrefs, logActivity } = useTrip()
   const trip = state.trip!
+  const [allListings, setAllListings] = useState<Listing[]>([])
   const [modalOpen, setModalOpen] = useState(false)
   const [reserved, setReserved] = useState<string | null>(null)
 
+  useEffect(() => {
+    let cancelled = false
+    function load() {
+      fetchListings().then((data) => {
+        if (!cancelled) setAllListings(data)
+      })
+    }
+    load()
+    const unsubscribe = subscribeToListings(load)
+    return () => {
+      cancelled = true
+      unsubscribe()
+    }
+  }, [])
+
   const localMatches = useMemo(
-    () => listings.filter((l) => l.city.toLowerCase() === trip.destinationCity.toLowerCase()),
-    [trip.destinationCity],
+    () => allListings.filter((l) => l.city.toLowerCase() === trip.destinationCity.toLowerCase()),
+    [allListings, trip.destinationCity],
   )
   const hasLocalListings = localMatches.length > 0
-  const cityListings = hasLocalListings ? localMatches : listings
+  const cityListings = hasLocalListings ? localMatches : allListings
 
   const zones = useMemo(
     () => ['all', ...new Set(cityListings.map((l) => l.neighborhood))],
@@ -162,7 +179,13 @@ export function SettleTab() {
         ))}
       </div>
 
-      {modalOpen && <ListingModal onClose={() => setModalOpen(false)} />}
+      {modalOpen && (
+        <ListingModal
+          city={trip.destinationCity}
+          country={trip.destinationCountry}
+          onClose={() => setModalOpen(false)}
+        />
+      )}
     </div>
   )
 }

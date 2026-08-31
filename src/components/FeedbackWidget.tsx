@@ -1,5 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTrip } from '../lib/tripState'
+import { fetchFeedbackSummary, submitFeedbackRemote } from '../lib/repos/feedbackRepo'
+import { isSupabaseConfigured } from '../lib/supabaseClient'
 
 export function FeedbackWidget() {
   const { state, submitFeedback } = useTrip()
@@ -7,16 +9,31 @@ export function FeedbackWidget() {
   const [rating, setRating] = useState(0)
   const [comment, setComment] = useState('')
   const [submitted, setSubmitted] = useState(false)
+  const [remoteSummary, setRemoteSummary] = useState<{ average: number; count: number } | null>(
+    null,
+  )
 
-  function handleSubmit() {
+  useEffect(() => {
+    if (!isSupabaseConfigured) return
+    fetchFeedbackSummary().then(setRemoteSummary)
+  }, [submitted])
+
+  async function handleSubmit() {
     if (rating === 0) return
     submitFeedback(rating, comment)
+    await submitFeedbackRemote(rating, comment)
     setSubmitted(true)
   }
 
-  const average =
+  const localAverage =
     state.feedback.length > 0
       ? (state.feedback.reduce((sum, f) => sum + f.rating, 0) / state.feedback.length).toFixed(1)
+      : null
+
+  const displayAverage = remoteSummary
+    ? { value: remoteSummary.average.toFixed(1), count: remoteSummary.count }
+    : localAverage
+      ? { value: localAverage, count: state.feedback.length }
       : null
 
   if (!open) {
@@ -38,10 +55,11 @@ export function FeedbackWidget() {
         <p className="text-sm text-emerald-700 dark:text-emerald-300">
           Thanks — this is exactly the kind of signal we use to prioritize what to
           build next.
-          {average && (
+          {displayAverage && (
             <span className="mt-1 block text-slate-400">
-              Average so far: {average}/5 ({state.feedback.length} response
-              {state.feedback.length === 1 ? '' : 's'})
+              Average {isSupabaseConfigured ? 'across all users' : 'so far'}:{' '}
+              {displayAverage.value}/5 ({displayAverage.count} response
+              {displayAverage.count === 1 ? '' : 's'})
             </span>
           )}
         </p>

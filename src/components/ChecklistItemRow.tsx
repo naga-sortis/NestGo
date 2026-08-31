@@ -83,17 +83,22 @@ export function ChecklistItemRow({ item }: { item: ChecklistItem }) {
             </div>
           )}
 
-          <a
-            href={officialUrl}
-            target="_blank"
-            rel="noreferrer"
-            onClick={() => logActivity(`Looked up official source for: ${item.label}`)}
-            className="mt-3 inline-block text-xs font-medium text-emerald-700 hover:underline dark:text-emerald-400"
-          >
-            {item.online
-              ? '🔎 Find the official online form/portal'
-              : '🔎 Find the nearest office'}
-          </a>
+          <div className="mt-3 flex items-center justify-between">
+            <a
+              href={officialUrl}
+              target="_blank"
+              rel="noreferrer"
+              onClick={() => logActivity(`Looked up official source for: ${item.label}`)}
+              className="inline-block text-xs font-medium text-emerald-700 hover:underline dark:text-emerald-400"
+            >
+              {item.online
+                ? '🔎 Find the official online form/portal'
+                : '🔎 Find the nearest office'}
+            </a>
+            {item.lastVerifiedAt && (
+              <span className="text-xs text-slate-400">Verified {item.lastVerifiedAt}</span>
+            )}
+          </div>
         </div>
       )}
     </li>

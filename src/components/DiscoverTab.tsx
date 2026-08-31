@@ -1,23 +1,46 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTrip } from '../lib/tripState'
 import { getDestinationGuide } from '../data/discover'
+import {
+  fetchDestinationGuide,
+  type DestinationGuideWithMeta,
+} from '../lib/repos/destinationGuideRepo'
+import { ExchangeRateWidget } from './ExchangeRateWidget'
 
 type TripStyle = 'solo' | 'family'
 
 export function DiscoverTab() {
   const { state } = useTrip()
   const trip = state.trip!
-  const guide = getDestinationGuide(trip.destinationCountry)
+  const [guide, setGuide] = useState<DestinationGuideWithMeta>(() =>
+    getDestinationGuide(trip.destinationCountry),
+  )
   const [style, setStyle] = useState<TripStyle>('solo')
+
+  useEffect(() => {
+    let cancelled = false
+    setGuide(getDestinationGuide(trip.destinationCountry))
+    fetchDestinationGuide(trip.destinationCountry).then((result) => {
+      if (!cancelled) setGuide(result)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [trip.destinationCountry])
 
   const ideas = style === 'solo' ? guide.soloTripIdeas : guide.familyTripIdeas
 
   return (
     <div className="space-y-6">
       <div className="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
-        <h2 className="text-lg font-semibold">
-          Explore {trip.destinationCountry} — beyond the paperwork
-        </h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">
+            Explore {trip.destinationCountry} — beyond the paperwork
+          </h2>
+          {guide.lastVerifiedAt && (
+            <span className="text-xs text-slate-400">Verified {guide.lastVerifiedAt}</span>
+          )}
+        </div>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
           General starting points — confirm current details (hours, prices, exact
           season) before you travel.
@@ -53,6 +76,8 @@ export function DiscoverTab() {
           </ul>
         </div>
       </div>
+
+      <ExchangeRateWidget from={trip.originCountry} to={trip.destinationCountry} />
 
       <div className="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-800 dark:bg-slate-900">
         <div className="flex items-center justify-between">

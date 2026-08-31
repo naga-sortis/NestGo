@@ -1,11 +1,39 @@
 import { useState } from 'react'
+import { submitListing } from '../lib/repos/listingsRepo'
+import { getCurrency } from '../lib/currency'
 
-export function ListingModal({ onClose }: { onClose: () => void }) {
-  const [submitted, setSubmitted] = useState(false)
+export function ListingModal({
+  city,
+  country,
+  onClose,
+}: {
+  city: string
+  country: string
+  onClose: () => void
+}) {
+  const currency = getCurrency(country)
+  const [neighborhood, setNeighborhood] = useState('')
+  const [price, setPrice] = useState('')
+  const [itemsText, setItemsText] = useState('')
+  const [moveDate, setMoveDate] = useState('')
+  const [status, setStatus] = useState<'idle' | 'submitting' | { live: boolean }>('idle')
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    setSubmitted(true)
+    setStatus('submitting')
+    const result = await submitListing({
+      neighborhood,
+      city,
+      price: Number(price),
+      currency: currency.symbol,
+      moveDate,
+      items: itemsText
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean),
+      summary: `${neighborhood} hand-off listed by a NestGo user.`,
+    })
+    setStatus({ live: result.live })
   }
 
   return (
@@ -28,38 +56,50 @@ export function ListingModal({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
-        {submitted ? (
+        {typeof status === 'object' ? (
           <p className="mt-6 rounded-lg bg-emerald-50 p-4 text-sm text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300">
-            Listing submitted. It'll appear in the marketplace once reviewed.
+            {status.live
+              ? "Listed — it's live in the marketplace for everyone right now."
+              : 'Saved locally for this demo — connect Supabase (see README) to make listings visible to other users.'}
           </p>
         ) : (
           <form onSubmit={handleSubmit} className="mt-5 space-y-3">
             <input
               required
-              placeholder="Address / neighborhood"
+              value={neighborhood}
+              onChange={(e) => setNeighborhood(e.target.value)}
+              placeholder="Neighborhood"
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950"
             />
             <input
               required
-              placeholder="Monthly rent"
+              type="number"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              placeholder={`Monthly rent (${currency.symbol})`}
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950"
             />
             <textarea
               required
-              placeholder="Items included (furniture, Wi-Fi contract, etc.)"
+              value={itemsText}
+              onChange={(e) => setItemsText(e.target.value)}
+              placeholder="Items included, comma-separated (furniture, Wi-Fi contract, etc.)"
               rows={3}
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950"
             />
             <input
               type="date"
               required
+              value={moveDate}
+              onChange={(e) => setMoveDate(e.target.value)}
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-950"
             />
             <button
               type="submit"
-              className="w-full rounded-lg bg-emerald-800 px-4 py-2.5 font-medium text-white hover:bg-emerald-900"
+              disabled={status === 'submitting'}
+              className="w-full rounded-lg bg-emerald-800 px-4 py-2.5 font-medium text-white hover:bg-emerald-900 disabled:opacity-60"
             >
-              Submit listing
+              {status === 'submitting' ? 'Submitting…' : 'Submit listing'}
             </button>
           </form>
         )}

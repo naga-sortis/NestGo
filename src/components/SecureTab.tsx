@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { useTrip } from '../lib/tripState'
-import { getRequirements } from '../data/visaRequirements'
+import { useRequirements } from '../lib/repos/visaRequirementsRepo'
 import { downloadTextFile } from '../lib/download'
 import { buildCaseSummaryHtml } from '../lib/exportCase'
 import { SignaturePad } from './SignaturePad'
@@ -23,7 +23,7 @@ function mockExtractedIdentity() {
 export function SecureTab() {
   const { state, setFormAnswer, setSignature, logActivity } = useTrip()
   const trip = state.trip!
-  const { baseFields, checklist } = getRequirements(trip.destinationCountry, trip.purpose)
+  const { baseFields, checklist } = useRequirements(trip.destinationCountry, trip.purpose)
 
   const [uploadStep, setUploadStep] = useState<UploadStep>('idle')
   const [fileName, setFileName] = useState<string | null>(null)

@@ -12,6 +12,9 @@ export type ChecklistItem = {
   instructions: string
   online: boolean
   fields: FormField[]
+  // Only present when this item came from the live Supabase content table
+  // rather than the static fallback below.
+  lastVerifiedAt?: string
 }
 
 export type Requirements = {
@@ -250,11 +253,17 @@ const GENERIC_COUNTRY_CHECKLIST: ChecklistItem[] = [
   },
 ]
 
-export function getRequirements(destinationCountry: string, purpose: Purpose): Requirements {
-  const countryItems = COUNTRY_CHECKLIST[destinationCountry] ?? GENERIC_COUNTRY_CHECKLIST
+export function getPurposeChecklist(purpose: Purpose): ChecklistItem[] {
+  return PURPOSE_CHECKLIST[purpose]
+}
 
+export function getCountryChecklist(destinationCountry: string): ChecklistItem[] {
+  return COUNTRY_CHECKLIST[destinationCountry] ?? GENERIC_COUNTRY_CHECKLIST
+}
+
+export function getRequirements(destinationCountry: string, purpose: Purpose): Requirements {
   return {
     baseFields: BASE_FIELDS,
-    checklist: [...PURPOSE_CHECKLIST[purpose], ...countryItems],
+    checklist: [...getPurposeChecklist(purpose), ...getCountryChecklist(destinationCountry)],
   }
 }

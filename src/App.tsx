@@ -9,7 +9,7 @@ import { ItineraryIntake } from './components/ItineraryIntake'
 import { ActivityTimeline } from './components/ActivityTimeline'
 import { FeedbackWidget } from './components/FeedbackWidget'
 import { TripProvider, useTrip } from './lib/tripState'
-import { getRequirements } from './data/visaRequirements'
+import { useRequirements } from './lib/repos/visaRequirementsRepo'
 
 function AppShell() {
   const { state, resetTrip } = useTrip()
@@ -17,9 +17,9 @@ function AppShell() {
   const hasAutoAdvanced = useRef(false)
 
   const trip = state.trip
-  const checklist = trip ? getRequirements(trip.destinationCountry, trip.purpose).checklist : []
+  const { checklist } = useRequirements(trip?.destinationCountry ?? '', trip?.purpose ?? 'tourist')
   const allChecklistDone =
-    checklist.length > 0 && checklist.every((item) => state.checklist[item.id])
+    !!trip && checklist.length > 0 && checklist.every((item) => state.checklist[item.id])
 
   useEffect(() => {
     if (allChecklistDone && !hasAutoAdvanced.current) {

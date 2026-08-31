@@ -1,24 +1,53 @@
-import { useMemo, useState } from 'react'
-import { routines } from '../data/routines'
+import { useEffect, useMemo, useState } from 'react'
+import type { Routine } from '../data/routines'
+import { fetchRoutines, joinRoutine, subscribeToRoutines } from '../lib/repos/routinesRepo'
 import { getCommunityGroups } from '../data/communityGroups'
+import { isSupabaseConfigured } from '../lib/supabaseClient'
 import { useTrip } from '../lib/tripState'
 
 export function SocialTab() {
   const { state, toggleGroup, logActivity } = useTrip()
   const trip = state.trip!
+  const [allRoutines, setAllRoutines] = useState<Routine[]>([])
   const [joinedLoops, setJoinedLoops] = useState<Set<string>>(new Set())
+  const [joiningId, setJoiningId] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    function load() {
+      fetchRoutines().then((data) => {
+        if (!cancelled) setAllRoutines(data)
+      })
+    }
+    load()
+    const unsubscribe = subscribeToRoutines(load)
+    return () => {
+      cancelled = true
+      unsubscribe()
+    }
+  }, [])
 
   const groups = useMemo(() => getCommunityGroups(trip.destinationCity), [trip.destinationCity])
 
   const localRoutines = useMemo(
-    () => routines.filter((r) => r.city.toLowerCase() === trip.destinationCity.toLowerCase()),
-    [trip.destinationCity],
+    () => allRoutines.filter((r) => r.city.toLowerCase() === trip.destinationCity.toLowerCase()),
+    [allRoutines, trip.destinationCity],
   )
-  const visibleRoutines = localRoutines.length > 0 ? localRoutines : routines
+  const visibleRoutines = localRoutines.length > 0 ? localRoutines : allRoutines
 
-  function join(id: string) {
-    setJoinedLoops((prev) => new Set(prev).add(id))
-    logActivity(`Joined a routine loop in ${trip.destinationCity}`)
+  async function join(routine: Routine) {
+    setJoiningId(routine.id)
+    if (isSupabaseConfigured) {
+      const updated = await joinRoutine(routine.id)
+      if (updated) {
+        setJoinedLoops((prev) => new Set(prev).add(routine.id))
+        logActivity(`Joined a routine loop in ${trip.destinationCity}`)
+      }
+    } else {
+      setJoinedLoops((prev) => new Set(prev).add(routine.id))
+      logActivity(`Joined a routine loop in ${trip.destinationCity}`)
+    }
+    setJoiningId(null)
   }
 
   return (
@@ -86,9 +115,14 @@ export function SocialTab() {
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
           {visibleRoutines.map((routine) => {
             const isJoined = joinedLoops.has(routine.id)
-            const filled = isJoined
-              ? Math.min(routine.spotsFilled + 1, routine.spotsTotal)
-              : routine.spotsFilled
+            // Without a live backend, nothing else updates spotsFilled, so
+            // bump it optimistically. With one, join_routine() already
+            // persisted the real count and the realtime subscription above
+            // will refresh it.
+            const filled =
+              isJoined && !isSupabaseConfigured
+                ? Math.min(routine.spotsFilled + 1, routine.spotsTotal)
+                : routine.spotsFilled
             const full = filled >= routine.spotsTotal
 
             return (
@@ -111,8 +145,8 @@ export function SocialTab() {
                     {filled}/{routine.spotsTotal} spots filled
                   </span>
                   <button
-                    onClick={() => join(routine.id)}
-                    disabled={isJoined || full}
+                    onClick={() => join(routine)}
+                    disabled={isJoined || full || joiningId === routine.id}
                     className="rounded-lg bg-emerald-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-900 disabled:opacity-60"
                   >
                     {isJoined ? 'Joined ✓' : full ? 'Full' : 'Join loop'}
